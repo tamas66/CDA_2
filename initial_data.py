@@ -80,7 +80,6 @@ def visualize_data(df: pd.DataFrame, boxplot = False) -> None:
 
     import seaborn as sns
     
-    # Set the style of seaborn
     sns.set(style="whitegrid")
     
     # Plot histograms for numerical columns
@@ -154,7 +153,7 @@ def pca_analysis(df: pd.DataFrame, n_variance: float = 0.9) -> None:
 
 if __name__ == "__main__":
     # Load the data
-    file_path = 'HR_data.csv'  # Replace with your actual file path
+    file_path = 'HR_data.csv'
     df = load_data(file_path)
     
     # Inspect the data
@@ -166,4 +165,5 @@ if __name__ == "__main__":
     # Visualize the data
     visualize_data(df)
 
+    # Perform basic PCA analysis
     pca_analysis(df, n_variance=0.9)
