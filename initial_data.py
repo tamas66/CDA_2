@@ -25,6 +25,26 @@ def load_data(file_path: str) -> pd.DataFrame:
     
     return df
 
+def scale_data(X: np.ndarray, only_center: bool = False) -> np.ndarray:
+    """
+    Scale the data using StandardScaler.
+    
+    Args:
+        X (np.ndarray): The input data to scale.
+        
+    Returns:
+        np.ndarray: The scaled data.
+    """
+    mu = np.mean(X, axis=0)
+    sigma = np.std(X, axis=0)
+    X_centered = (X - mu)
+    X_scaled = X_centered / sigma
+    if only_center:
+        return X_centered, mu, sigma
+    else:
+        return X_scaled, mu, sigma
+
+
 def inspect_data(df: pd.DataFrame) -> None:
     """
     Inspect the data by printing the first few rows and summary statistics.
@@ -77,10 +97,6 @@ def visualize_data(df: pd.DataFrame, boxplot = False) -> None:
     Args:
         df (pd.DataFrame): The DataFrame to visualize.
     """
-
-    import seaborn as sns
-    
-    sns.set(style="whitegrid")
     
     # Plot histograms for numerical columns
     df.hist(figsize=(12, 10), bins=30)
@@ -89,11 +105,12 @@ def visualize_data(df: pd.DataFrame, boxplot = False) -> None:
     
     # Plot box plots for numerical columns
     if boxplot:
-        for col in df.select_dtypes(include=[np.number]).columns:
-            plt.figure(figsize=(10, 5))
-            sns.boxplot(x=df[col])
-            plt.title(f'Box plot of {col}')
-            plt.show()
+        plt.figure(figsize=(15, 6))
+        df.select_dtypes(include=[np.number]).boxplot()
+        plt.xticks(rotation=45)
+        plt.title('Box plots of numerical columns')
+        plt.tight_layout()
+        plt.show()
 
 def pca_analysis(df: pd.DataFrame, n_variance: float = 0.9) -> None:
     """
@@ -101,7 +118,7 @@ def pca_analysis(df: pd.DataFrame, n_variance: float = 0.9) -> None:
     
     Args:
         df (pd.DataFrame): The DataFrame to analyze.
-        n_components (int): The number of principal components to keep.
+        n_variance (float): The variance threshold to keep (0-1).
     """
     from sklearn.decomposition import PCA
     from sklearn.preprocessing import StandardScaler
@@ -110,8 +127,9 @@ def pca_analysis(df: pd.DataFrame, n_variance: float = 0.9) -> None:
         raise ValueError("n_variance must be between 0 and 1.")
     
     # Standardize the data
+    numeric_df = df.select_dtypes(include=[np.number])
     scaler = StandardScaler()
-    scaled_data = scaler.fit_transform(df.select_dtypes(include=[np.number]))
+    scaled_data = scaler.fit_transform(numeric_df)
     
     # Perform PCA
     pca = PCA(n_components=n_variance)
@@ -123,32 +141,44 @@ def pca_analysis(df: pd.DataFrame, n_variance: float = 0.9) -> None:
     # Create a DataFrame with PCA results
     pca_df = pd.DataFrame(data=pca_result, columns=[f'PC{i+1}' for i in range(n_components)])
     
-    # Print Loadings
-    loadings = pd.DataFrame(pca.components_.T, columns=[f'PC{i+1}' for i in range(n_components)], index=df.select_dtypes(include=[np.number]).columns)
+    # Print Loadings with the same format as custom implementation
+    loadings = pd.DataFrame(
+        pca.components_.T,
+        columns=[f'PC{i+1}' for i in range(n_components)],
+        index=numeric_df.columns
+    )
     print("\nPCA Loadings:")
-    print(loadings)
+    print(loadings.round(3))  # Match rounding from custom implementation
 
-    cum_explained_variance = np.cumsum(pca.explained_variance_ratio_)
-    # Scree Plot
-    plt.figure(figsize=(8, 6))
-    plt.plot(range(1, n_components + 1), pca.explained_variance_ratio_, marker='o')
-    plt.plot(range(1, n_components + 1), cum_explained_variance, marker='o', linestyle='--')
-    plt.axhline(y=n_variance, color='r', linestyle='--')
-    plt.axvline(x=n_components, color='g', linestyle='--')
-    plt.title('Scree Plot')
+    # Variance calculations to match custom implementation output
+    explained_variance = pca.explained_variance_ratio_
+    cumulative_variance = np.cumsum(explained_variance)
+    print("\nExplained Variance Ratio:")
+    print(np.round(explained_variance, 3))
+    print("\nCumulative Variance:")
+    print(np.round(cumulative_variance, 3))
+    
+    # Enhanced Scree Plot to match custom implementation style
+    plt.figure(figsize=(10, 6))
+    plt.bar(range(1, n_components+1), explained_variance, alpha=0.5, label='Individual')
+    plt.plot(range(1, n_components+1), cumulative_variance, 'o--', color='red', label='Cumulative')
+    plt.axhline(y=n_variance, color='green', linestyle='--', label=f'Threshold ({n_variance*100}%)')
+    plt.axvline(x=n_components, color='purple', linestyle=':', label='Selected Components')
+    plt.title('Scree Plot with Cumulative Variance')
     plt.xlabel('Principal Component')
-    plt.ylabel('Variance Explained')
-    plt.xticks(range(1, n_components + 1))
-    plt.grid()
+    plt.ylabel('Explained Variance Ratio')
+    plt.xticks(range(1, n_components+1))
+    plt.legend()
+    plt.grid(True)
     plt.show()
 
-    # Plot the PCA results
+    # PCA Scatter plot with same styling as custom implementation
     plt.figure(figsize=(8, 6))
-    plt.scatter(pca_df.iloc[:, 0], pca_df.iloc[:, 1])
-    plt.title('PCA Result')
-    plt.xlabel('Principal Component 1')
-    plt.ylabel('Principal Component 2')
-    plt.grid()
+    plt.scatter(pca_df.iloc[:, 0], pca_df.iloc[:, 1], alpha=0.7, edgecolors='w')
+    plt.title('First Two Principal Components')
+    plt.xlabel(f'PC1 ({explained_variance[0]*100:.1f}%)')
+    plt.ylabel(f'PC2 ({explained_variance[1]*100:.1f}%)')
+    plt.grid(True)
     plt.show()
 
 if __name__ == "__main__":
