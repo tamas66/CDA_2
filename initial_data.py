@@ -41,8 +41,8 @@ def scale_data(X: np.ndarray, only_center: bool = False) -> np.ndarray:
     X_scaled = X_centered / sigma
     if only_center:
         return X_centered, mu, sigma
-    else:
-        return X_scaled, mu, sigma
+
+    return X_scaled, mu, sigma
 
 
 def inspect_data(df: pd.DataFrame) -> None:
