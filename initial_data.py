@@ -181,6 +181,83 @@ def pca_analysis(df: pd.DataFrame, n_variance: float = 0.9) -> None:
     plt.grid(True)
     plt.show()
 
+    # PCA Loadings plot with same styling as custom implementation
+    plt.figure(figsize=(8, 8))
+    plt.axhline(0, color='gray', linestyle='--', linewidth=0.5)
+    plt.axvline(0, color='gray', linestyle='--', linewidth=0.5)
+
+    # Plot variable loadings as points
+    plt.scatter(loadings['PC1'], loadings['PC2'], color='red')
+
+    # Annotate each point with the variable name
+    for var, (x, y) in loadings[['PC1', 'PC2']].iterrows():
+        plt.text(x, y, var, fontsize=10, ha='center', va='center')
+
+    plt.xlabel(f'PC1 ({explained_variance[0]*100:.1f}%)')
+    plt.ylabel(f'PC2 ({explained_variance[1]*100:.1f}%)')
+    plt.title('PCA Loadings Plot (Variable Contributions)')
+    plt.grid(True)
+    plt.axis('equal')  # Makes unit lengths equal on both axes
+    plt.show()
+
+    return loadings
+
+def plot_loadings_grid(loadings: pd.DataFrame, explained_variance: list = None, max_pc: int = 4):
+    """
+    Plots a grid of PCA loading plots for combinations of principal components.
+
+    Parameters:
+    - loadings: pd.DataFrame with PCs as columns (e.g., 'PC1', 'PC2', ...) and variables as index
+    - explained_variance: list or array of explained variance ratios per PC (optional, for axis labels)
+    - max_pc: number of PCs to include in the plot combinations (default is 4)
+    """
+    import itertools
+
+    pc_names = loadings.columns[:max_pc]
+    pc_pairs = list(itertools.combinations(pc_names, 2))
+
+    n_plots = len(pc_pairs)
+    n_cols = 3
+    n_rows = (n_plots + n_cols - 1) // n_cols
+
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(n_cols*5, n_rows*5))
+    axes = axes.flatten()
+
+    for i, (pc_x, pc_y) in enumerate(pc_pairs):
+        ax = axes[i]
+        
+        ax.axhline(0, color='gray', linestyle='--', linewidth=0.5)
+        ax.axvline(0, color='gray', linestyle='--', linewidth=0.5)
+
+        ax.scatter(loadings[pc_x], loadings[pc_y], color='red')
+
+        for var, (x, y) in loadings[[pc_x, pc_y]].iterrows():
+            ax.text(x, y, var, fontsize=9, ha='center', va='center')
+
+        if explained_variance is not None:
+            idx_x = int(pc_x[2:]) - 1
+            idx_y = int(pc_y[2:]) - 1
+            xlabel = f'{pc_x} ({explained_variance[idx_x]*100:.1f}%)'
+            ylabel = f'{pc_y} ({explained_variance[idx_y]*100:.1f}%)'
+        else:
+            xlabel = pc_x
+            ylabel = pc_y
+
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(ylabel)
+        ax.set_title(f'{pc_x} vs {pc_y}')
+        ax.grid(True)
+        ax.set_aspect('equal')
+
+    # Hide any unused axes
+    for j in range(i+1, len(axes)):
+        fig.delaxes(axes[j])
+
+    plt.tight_layout()
+    plt.suptitle('Grid of PCA Loadings Plots', fontsize=16, y=1.02)
+    plt.show()
+
+
 if __name__ == "__main__":
     # Load the data
     file_path = 'HR_data.csv'
@@ -193,7 +270,11 @@ if __name__ == "__main__":
     df = preprocess_data(df)
     
     # Visualize the data
-    visualize_data(df)
+    #visualize_data(df)
 
     # Perform basic PCA analysis
-    pca_analysis(df, n_variance=0.9)
+    loadings = pca_analysis(df, n_variance=0.9)
+
+    # Plot the PCA loadings grid
+    plot_loadings_grid(loadings, max_pc=4)
+
