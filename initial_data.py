@@ -257,6 +257,43 @@ def plot_loadings_grid(loadings: pd.DataFrame, explained_variance: list = None, 
     plt.suptitle('Grid of PCA Loadings Plots', fontsize=16, y=1.02)
     plt.show()
 
+def plot_cos2_heatmap(loadings: pd.DataFrame, max_pc: int = 6, variables_per_page: int = 25, cmap="viridis"):
+    
+    import seaborn as sns
+    import math
+
+    pcs = loadings.columns[:max_pc]
+    squared_loadings = loadings[pcs] ** 2
+    cos2 = squared_loadings.div(squared_loadings.sum(axis=1), axis=0)
+
+    total_vars = cos2.shape[0]
+    n_pages = math.ceil(total_vars / variables_per_page)
+
+    n_cols = 2
+    n_rows = math.ceil(n_pages / n_cols)
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(12, n_rows * 5))
+    axes = axes.flatten()
+
+    for i in range(n_pages):
+        start = i * variables_per_page
+        end = min(start + variables_per_page, total_vars)
+        subset = cos2.iloc[start:end]
+
+        ax = axes[i]
+        sns.heatmap(subset, annot=True, fmt=".2f", cmap=cmap, linewidths=0.5,
+                    cbar_kws={'label': 'Cos²'}, ax=ax)
+        ax.set_title(f"Cos²: Variables {start+1}–{end}")
+        ax.set_xlabel("Principal Components")
+        ax.set_ylabel("Variables")
+        ax.set_yticklabels(ax.get_yticklabels(), rotation=0, fontsize=8)
+
+    # Hide any extra subplots
+    for j in range(n_pages, len(axes)):
+        fig.delaxes(axes[j])
+
+    plt.tight_layout()
+    plt.suptitle("Cos² Heatmaps (Grid View)", fontsize=16, y=1.02)
+    plt.show()
 
 if __name__ == "__main__":
     # Load the data
@@ -278,3 +315,5 @@ if __name__ == "__main__":
     # Plot the PCA loadings grid
     plot_loadings_grid(loadings, max_pc=4)
 
+    # Plot the cos² heatmap
+    plot_cos2_heatmap(loadings, max_pc=6)
