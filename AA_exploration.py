@@ -79,3 +79,48 @@ for arch in archetype_df.columns:
     print(f"Top variables for {arch}:")
     print(archetype_df[arch].abs().sort_values(ascending=False).head(5))
     print()
+
+emotion_states = ['Frustrated',
+    'upset','hostile','alert','ashamed','inspired','nervous',
+    'attentive','afraid','active','determined'] 
+
+# --- HARD ASSIGNMENT ---
+# Find closest archetype
+closest_archetype = np.argmax(X_trans, axis=1)
+
+# Add assignment to dataframe
+df['Closest_Archetype'] = closest_archetype
+
+# Group by closest archetype
+hard_emotion_means = df.groupby('Closest_Archetype')[emotion_states].mean()
+
+# Plot
+plt.figure(figsize=(12, 6))
+sns.heatmap(hard_emotion_means, annot=True, cmap='coolwarm', center=0)
+plt.title("Emotion Means per Archetype (Hard Assignment)")
+plt.xlabel("Emotion")
+plt.ylabel("Archetype")
+plt.tight_layout()
+plt.show()
+
+
+# --- SOFT ASSIGNMENT ---
+
+# Create a soft-weighted dataframe
+soft_emotion_means = pd.DataFrame(0, index=range(X_trans.shape[1]), columns=emotion_states)  # (archetypes x emotions)
+
+# Loop over archetypes
+for arch in range(X_trans.shape[1]):
+    # For each archetype, weight emotions by soft membership
+    weights = X_trans[:, arch]
+    weighted_emotions = df[emotion_states].multiply(weights, axis=0)
+    soft_emotion_means.loc[arch] = weighted_emotions.sum(axis=0) / weights.sum()
+
+# Plot
+plt.figure(figsize=(12, 6))
+sns.heatmap(soft_emotion_means, annot=True, cmap='viridis', center=0)
+plt.title("Emotion Means per Archetype (Soft Assignment)")
+plt.xlabel("Emotion")
+plt.ylabel("Archetype")
+plt.tight_layout()
+plt.show()
