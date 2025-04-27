@@ -191,7 +191,7 @@ def cluster_sparse_scores(
         print(msg)
 
         if S.shape[1] >= 2:  # scatter of first two dims
-            plt.figure(figsize=(5, 4))
+            plt.figure(figsize=(16, 4))
             sns.scatterplot(x=S[:, 0], y=S[:, 1],
                             hue=best_lab, palette="tab10",
                             style=meta_labels if meta_labels is not None else None,
@@ -199,6 +199,62 @@ def cluster_sparse_scores(
             plt.title(f"{tag} – KMeans k={best_k}")
             plt.xlabel("PC1"); plt.ylabel("PC2")
             plt.tight_layout(); plt.show()
+
+# ─────────────────────────  ROLE-SUBSPACE ANALYSIS ──────────────────────
+def role_subspace_similarity(
+    df: pd.DataFrame,
+    role_col: str = "Puzzler",       # 1 = puzzler, 0 = instructor
+    flavour: str = "en",             # "thr" | "var" | "en"
+    n_variance: float = 0.9,
+    threshold: float = 0.15,
+):
+    """
+    Compare sparse-PCA loadings for Puzzlers vs Instructors.
+
+    Returns
+    -------
+    L_A : ndarray (p × kA)
+    L_B : ndarray (p × kB)
+    cos_mat : ndarray (kA × kB) absolute cosine similarities.
+    """
+    if flavour not in {"thr", "var", "en"}:
+        raise ValueError("flavour must be 'thr', 'var' or 'en'.")
+
+    # --- split --------------------------------------------------------
+    df_A = df[df[role_col] == 0]     # instructors
+    df_B = df[df[role_col] == 1]     # puzzlers
+
+    res_A = compute_sparse_pca(df_A, n_variance, threshold)
+    res_B = compute_sparse_pca(df_B, n_variance, threshold)
+
+    L_A = res_A[flavour]["L"];  kA = L_A.shape[1]
+    L_B = res_B[flavour]["L"];  kB = L_B.shape[1]
+
+    # unit-norm (already orthonormal, but in case sparsity killed norms)
+    L_A = L_A / np.linalg.norm(L_A, axis=0, keepdims=True)
+    L_B = L_B / np.linalg.norm(L_B, axis=0, keepdims=True)
+
+    # absolute cosine similarity matrix
+    cos_mat = np.abs(L_A.T @ L_B)
+
+    # --- print summary ----------------------------------------------
+    print(f"\nSparse-PCA flavour: {flavour}")
+    print(" | Instructor PCs | Puzzler PCs |  |cos|")
+    for i in range(min(kA, kB)):
+        print(f"   PC{i+1:<2d}            PC{i+1:<2d}        {cos_mat[i,i]:.3f}")
+
+    # --- heat-map ----------------------------------------------------
+    plt.figure(figsize=(16, 16))
+    sns.heatmap(cos_mat, annot=True, fmt=".2f", cmap="magma",
+                xticklabels=[f"P{i+1}" for i in range(kB)],
+                yticklabels=[f"I{i+1}" for i in range(kA)])
+    plt.title(f"|cosine| between Instructor and Puzzler loadings "
+              f"({flavour})")
+    plt.xlabel("Puzzler PCs"); plt.ylabel("Instructor PCs")
+    plt.tight_layout(); plt.show()
+
+    return L_A, L_B, cos_mat
+
 
 
 # ───────────────────────── 5.  EXAMPLE USAGE ────────────────────────────
@@ -209,15 +265,23 @@ if __name__ == "__main__":
     df = preprocess_data(df)
 
     # 1) compute sparse-PCA flavours
-    spca_results = compute_sparse_pca(df, n_variance=0.9, threshold=0.15)
+    #spca_results = compute_sparse_pca(df, n_variance=0.9, threshold=0.15)
 
     # 2) variance bars of sparse pca method vs dense pca, correlation heat-maps & Cos² heat-maps
-    plot_sparse_pca_diagnostics(spca_results, df)
+    #plot_sparse_pca_diagnostics(spca_results, df)
 
     # 3) K means clustering + silhouette score
-    phase_labels = df["phase"].values if "phase" in df else None
-    cluster_sparse_scores(spca_results, meta_labels=phase_labels)
+    #phase_labels = df["phase"].values if "phase" in df else None
+    #cluster_sparse_scores(spca_results, meta_labels=phase_labels)
 
-
-
+    # Team role inspection using sparse PCA
+    # compare the sparse PCA methods sub-spaces of the two roles
+    # L_I, L_P, C = role_subspace_similarity(
+    #     df,
+    #     role_col="Puzzler",
+    #     flavour="en",      #"thr", "var" or "en"
+    #     n_variance=0.9,
+    #     threshold=0.15,
+    # )
+    
 
