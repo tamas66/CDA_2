@@ -39,9 +39,15 @@ XC, S, C, SSE, varexpl = PCHA(X.T, noc=10, delta=0.1)
 X_trans = np.array(S).T           # S matrix: samples x archetypes
 
 # FastICA
-#FastICA_ = FastICA(n_components=10, random_state=0)
-#X_trans = FastICA_.fit_transform(X)
-#XC = FastICA_.components_.T  # components (archetypes) x features
+# FastICA_ = FastICA(n_components=10, random_state=0)
+# X_trans = FastICA_.fit_transform(X)
+# XC = FastICA_.components_.T  # components (archetypes) x features
+
+# PCA
+# PCA_ = PCA(n_components=10, random_state=0)
+# X_trans = PCA_.fit_transform(X)
+# XC = PCA_.components_.T  # components (archetypes) x features
+
 
 # scatter of the first four dims
 state = 'inspired'  # can pick any emotion or Puzzler etc
@@ -112,7 +118,7 @@ plt.show()
 
 # Create a soft-weighted dataframe
 # Create DataFrame to hold soft emotion means (components x emotions)
-""" FOR ICA
+""" #FOR ICA / PCA
 soft_emotion_means = pd.DataFrame(0.0, index=[f"IC_{i+1}" for i in range(X_trans.shape[1])], columns=emotion_states)
 
 for i in range(X_trans.shape[1]):
@@ -153,7 +159,6 @@ plt.xlabel("Emotion")
 plt.ylabel("Archetype")
 plt.tight_layout()
 plt.show()
-
 
 """
 from sklearn.metrics import silhouette_score, silhouette_samples
