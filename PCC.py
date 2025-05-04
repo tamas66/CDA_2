@@ -1,12 +1,12 @@
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 from sklearn.pipeline import Pipeline
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import GridSearchCV, KFold, cross_val_score
-import matplotlib.pyplot as plt
-from pandas.api.types import CategoricalDtype
+from initial_data import convert_to_cat
 
 
 # ───────────────────────── PCC core helper ──────────────────────────
@@ -92,7 +92,7 @@ def try_pcc(df, y_col, var_thr=0.70, scoring="accuracy"):
     df = df.copy()
     print(f"\n====  {y_col}  ====")
 
-    df = convert_to_cat(df=df, y_col=y_col)
+    df = convert_to_cat(df=df, col=y_col)
 
     # Check class balance
     class_counts = df[y_col].value_counts()
@@ -112,44 +112,6 @@ def try_pcc(df, y_col, var_thr=0.70, scoring="accuracy"):
         print(f"{y_col:<12} | Failed ({str(e)}")
         return np.nan
 
-def convert_to_cat(df, y_col):
-    """Convert categorical columns to category dtype."""
-    # Handle numeric conversion
-    if np.issubdtype(df[y_col].dtype, np.number):
-        y_vals = df[y_col]
-        min_val = int(y_vals.min())
-        max_val = int(y_vals.max())
-        
-        # Preserve original scale for binary (0/1) variables
-        if max_val == 1 and min_val == 0:
-            scale_bounds = (0, 1)
-        else:
-            scale_bounds = (min_val, max_val)
-        
-        y_processed = np.clip(y_vals, *scale_bounds).astype(int)
-        
-        # Check if we have valid categories after processing
-        unique_vals = np.unique(y_processed)
-        if len(unique_vals) < 2:
-            print(f"{y_col:<12} | Insufficient unique values after processing - skipping")
-            return np.nan
-            
-        # Convert to ordered categorical
-        df[y_col] = pd.Categorical(
-            y_processed,
-            categories=np.arange(scale_bounds[0], scale_bounds[1]+1),
-            ordered=True
-        )
-        print(f"{y_col:<12} | Converted to {len(unique_vals)}-class ordered categorical")
-
-        for col in df.columns:
-            if df[col].dtype == 'object' or df[col].dtype.name == 'category':
-                df[col] = df[col].fillna(df[col].mode()[0])
-            else:
-                # Fill numeric missing values with mean
-                df[col] = df[col].fillna(df[col].mean())
-        
-    return df
 # ──────────────────────────── MAIN loop ─────────────────────────────
 if __name__ == "__main__":
     from initial_data import load_data, preprocess_data
@@ -175,7 +137,6 @@ if __name__ == "__main__":
     print("\n===  PCC cross-validated accuracy (70% variance PCs)  ===")
     print(res_series.round(3).to_string())
     # Visaulization
-    plt.figure(figsize=(10, 6))
     plt.plot(res_series, marker="o")
     plt.xticks(rotation=45, ha="right")
     plt.title(f"PCC cross-validated {scoring} ({var_thr*100:.0f}% variance PCs)")
