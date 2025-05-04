@@ -78,30 +78,3 @@ for name, model in methods.items():
     plt.tight_layout()
     plt.show()
 
-    # added KNN classifier to see if the lower-dimensional rep is meaningful
-    # now apply KNN on the reduced data (lower-dimensional representation)
-    X_knn = proj_df
-    y_knn = proj_df[state]  # target labels 
-
-    knn = KNeighborsClassifier(n_neighbors=5)
-
-    # this split needs to be done in the BEGINNING of the script
-    X_train, X_test, y_train, y_test = train_test_split(X_knn, y_knn, test_size=0.2, random_state=42)
-
-    # fit the KNN model on the lower-dimensional data
-    knn.fit(X_train, y_train)
-    y_pred = knn.predict(X_test)
-    accuracy = np.mean(y_pred == y_test)
-    print(f"KNN w {name}, classification accuracy: {accuracy:.2f}")
-
-
-
-# KNN w AA, classification accuracy: 0.97 for state "inspired"! 
-# this needs to be put in a pipeline to avoid dataleakage (we have it now!)
-# but nice to see as an an initial starting point:)
-
-# TO DO: 
-# split data before dimensionality reduction is performed
-# implement as a class/ function for easier testing of different models
-# pipeline w cross-validation for optimal num neighbours for the classifier 
-# (and also CV for other hyperparams and n_components)
