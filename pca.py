@@ -119,6 +119,10 @@ def plot_scree_plot(model, variance_threshold=None, plot_variance=True):
         # Simple line plot for eigenvalues
         line, = ax.plot(x_range, values, 'o-', color='blue')
         ylabel = 'Eigenvalues'
+        # Draw a vertical line at point 12
+        ax.axvline(x=12, color='orange', linestyle='--', label='Point 12')
+        ax.set_ylim(0, max(values) * 1.1)
+
     
     # Add threshold indicators if provided
     threshold_lines = []
