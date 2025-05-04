@@ -87,16 +87,33 @@ def run_pcc_from_df(
     return cv_score
 
 
-def try_pcc(df, y_col, var_thr=0.70, scoring="accuracy", min_samples=5):
+def try_pcc(df, y_col, var_thr=0.70, scoring="accuracy"):
     """Run PCC on y_col if suitable; return CV score or NaN."""
     df = df.copy()
     print(f"\n====  {y_col}  ====")
-    # Handle missing values
-    initial_count = len(df)
-    df = df.dropna(subset=[y_col])
-    if initial_count != len(df):
-        print(f"{y_col:<12} | Dropped {initial_count - len(df)} missing values")
 
+    df = convert_to_cat(df=df, y_col=y_col)
+
+    # Check class balance
+    class_counts = df[y_col].value_counts()
+    if len(class_counts) < 2:
+        print(f"{y_col:<12} | Needs ≥2 classes - skipping")
+        return np.nan
+    
+    try:
+
+        return run_pcc_from_df(
+            df,
+            y_col=y_col,
+            variance_threshold=var_thr,
+            scoring=scoring
+        )
+    except Exception as e:
+        print(f"{y_col:<12} | Failed ({str(e)}")
+        return np.nan
+
+def convert_to_cat(df, y_col):
+    """Convert categorical columns to category dtype."""
     # Handle numeric conversion
     if np.issubdtype(df[y_col].dtype, np.number):
         y_vals = df[y_col]
@@ -125,28 +142,14 @@ def try_pcc(df, y_col, var_thr=0.70, scoring="accuracy", min_samples=5):
         )
         print(f"{y_col:<12} | Converted to {len(unique_vals)}-class ordered categorical")
 
-    # Check class balance
-    class_counts = df[y_col].value_counts()
-    if len(class_counts) < 2:
-        print(f"{y_col:<12} | Needs ≥2 classes - skipping")
-        return np.nan
+        for col in df.columns:
+            if df[col].dtype == 'object' or df[col].dtype.name == 'category':
+                df[col] = df[col].fillna(df[col].mode()[0])
+            else:
+                # Fill numeric missing values with mean
+                df[col] = df[col].fillna(df[col].mean())
         
-    if class_counts.min() < min_samples:
-        print(f"{y_col:<12} | Small classes detected - applying class weights")
-    
-    try:
-
-        return run_pcc_from_df(
-            df,
-            y_col=y_col,
-            variance_threshold=var_thr,
-            scoring=scoring
-        )
-    except Exception as e:
-        print(f"{y_col:<12} | Failed ({str(e)}")
-        return np.nan
-
-
+    return df
 # ──────────────────────────── MAIN loop ─────────────────────────────
 if __name__ == "__main__":
     from initial_data import load_data, preprocess_data
