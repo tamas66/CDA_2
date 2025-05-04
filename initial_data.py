@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import os
 import matplotlib.pyplot as plt
+from pandas.api.types import CategoricalDtype
 
 
 def load_data(file_path: str) -> pd.DataFrame:
@@ -294,6 +295,47 @@ def plot_cos2_heatmap(loadings: pd.DataFrame, max_pc: int = 6, variables_per_pag
     plt.tight_layout()
     plt.suptitle("Cos² Heatmaps (Grid View)", fontsize=16, y=1.02)
     plt.show()
+
+def convert_to_cat(df, col):
+    """Convert categorical columns to category dtype."""
+    # Handle numeric conversion
+    if np.issubdtype(df[col].dtype, np.number):
+        y_vals = df[col]
+        min_val = int(y_vals.min())
+        max_val = int(y_vals.max())
+        
+        # Preserve original scale for binary (0/1) variables
+        if max_val == 1 and min_val == 0:
+            scale_bounds = (0, 1)
+        else:
+            scale_bounds = (min_val, max_val)
+        
+        y_processed = np.clip(y_vals, *scale_bounds).astype(int)
+        
+        # Check if we have valid categories after processing
+        unique_vals = np.unique(y_processed)
+        if len(unique_vals) < 2:
+            print(f"{col:<12} | Insufficient unique values after processing - skipping")
+            return np.nan
+            
+        # Convert to ordered categorical
+        df[col] = pd.Categorical(
+            y_processed,
+            categories=np.arange(scale_bounds[0], scale_bounds[1]+1),
+            ordered=True
+        )
+        print(f"{col:<12} | Converted to {len(unique_vals)}-class ordered categorical")
+
+        for col in df.columns:
+            if df[col].dtype == 'object' or df[col].dtype.name == 'category':
+                df[col] = df[col].fillna(df[col].mode()[0])
+            else:
+                # Fill numeric missing values with mean
+                df[col] = df[col].fillna(df[col].mean())
+        
+    return df
+
+
 
 if __name__ == "__main__":
     # Load the data

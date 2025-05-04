@@ -125,7 +125,7 @@ if __name__ == "__main__":
 
     plt.plot(res_series, marker="o")
     plt.xticks(rotation=45, ha="right")
-    plt.title("PCR cross-validated R² (70 % variance PCs)")
+    plt.title("PCR cross-validated R² (70% variance PCs)")
     plt.xlabel("Response variable")
     plt.ylabel("CV-R²")
     plt.tight_layout()
