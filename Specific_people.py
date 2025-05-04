@@ -24,9 +24,9 @@ df = preprocess_data(df)
 
 X_df = df.drop(columns=categorical) # drop categorical values for lower dimensional representation
 
-# scaler = StandardScaler()
-# X_scaled = scaler.fit_transform(X_df)
-X_scaled = X_df.values  # Use the raw values for PCA and other analyses
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X_df)
+# X_scaled = X_df.values  # Use the raw values for PCA and other analyses
 
 import numpy as np
 
@@ -34,9 +34,11 @@ group1 = X_scaled[np.r_[1:170, 241:310]]
 group2 = X_scaled[171:241]
 
 from sklearn.decomposition import PCA
+# TSNE
+from sklearn.manifold import TSNE
 import matplotlib.pyplot as plt
 
-pca = PCA(n_components=2)
+pca = TSNE(n_components=2)
 X_pca = pca.fit_transform(X_scaled)
 
 plt.figure(figsize=(8,6))
@@ -63,8 +65,6 @@ plt.bar(range(X_scaled.shape[1]), np.mean(group1, axis=0), alpha=0.5, label='Coh
 plt.bar(range(X_scaled.shape[1]), np.mean(group2, axis=0), alpha=0.5, label='Cohorts D1_2 (170–241)')
 plt.xticks(range(X_scaled.shape[1]), feature_names, rotation=90)
 plt.xlabel('Features')
-
-plt.ylim(0, 100)
 
 plt.ylabel('Mean Value')
 plt.title('Mean Values of Features for Two Groups')
