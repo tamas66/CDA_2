@@ -20,9 +20,15 @@ inspect_data(df)
 # convert selected columns to object type to work with imputation in preprocessing from initial_data.py
 categorical = ['Round','Phase','Individual','Puzzler','Frustrated','Cohort',
     'upset','hostile','alert','ashamed','inspired','nervous',
-    'attentive','afraid','active','determined', 'raw_data_path', 'Team_ID']
+    'attentive','afraid','active','determined', 'raw_data_path', 'Team_ID', 'original_ID', "Unnamed: 0"]
 
 df[categorical] = df[categorical].astype('object')
+
+# Pick out only columns with "Round" == "round_1"
+# df = df[(df['Phase'] == 'phase2')]
+
+# Pick out only entries in the range of 1:170
+df = df.iloc[171:241]
 
 # preprocess the data -> imputing missing values
 df = preprocess_data(df)
@@ -35,25 +41,26 @@ X_scaled = scaler.fit_transform(X_df)
 # prepare different versions of the data to be given to different models
 X = X_scaled
 
-XC, S, C, SSE, varexpl = PCHA(X.T, noc=10, delta=0.1)
-X_trans = np.array(S).T           # S matrix: samples x archetypes
+
+#PCA_ = PCA(n_components=10, random_state=0)
+#X_trans = PCA_.fit_transform(X)
+#XC = PCA_.components_.T  # components (archetypes) x features
 
 # FastICA
-# FastICA_ = FastICA(n_components=10, random_state=0)
+# FastICA_ = FastICA(n_components=20, random_state=0)
 # X_trans = FastICA_.fit_transform(X)
 # XC = FastICA_.components_.T  # components (archetypes) x features
 
 # PCA
-# PCA_ = PCA(n_components=10, random_state=0)
-# X_trans = PCA_.fit_transform(X)
-# XC = PCA_.components_.T  # components (archetypes) x features
+XC, S, C, SSE, varexpl = PCHA(X.T, noc=7, delta=0.4)
+X_trans = np.array(S).T           # S matrix: samples x archetypes
 
 
 # scatter of the first four dims
-state = 'inspired'  # can pick any emotion or Puzzler etc
+state = 'Frustrated'  # can pick any emotion or Puzzler etc
 color_values = df[state].values
 
-proj_df = pd.DataFrame(X_trans[:, :6], columns=[f"Comp_{i+1}" for i in range(6)])
+proj_df = pd.DataFrame(X_trans[:, :4], columns=[f"Comp_{i+1}" for i in range(4)])
 proj_df[state] = df[state]
 print(proj_df[state])
 
@@ -65,7 +72,7 @@ plt.show()
 
 plt.figure(figsize=(12, 6))
 sns.heatmap(X_trans, cmap='viridis', cbar=True)
-plt.title("Soft Weights: Subjects vs Archetypes")
+plt.title("Subjects and Archetypes")
 plt.xlabel("Archetypes")
 plt.ylabel("Subjects")
 plt.tight_layout()
@@ -74,7 +81,7 @@ plt.show()
 
 archetype_df = pd.DataFrame(XC, 
                             index=X_df.columns, 
-                            columns=[f"Archetype_{i+1}" for i in range(XC.shape[1])])
+                            columns=[f"{i}" for i in range(XC.shape[1])])
 
 # visualize the variable loadings for each archetype
 plt.figure(figsize=(14, 8))
@@ -82,6 +89,10 @@ sns.heatmap(archetype_df, annot=False, cmap="coolwarm", center=0)
 plt.title("Variable Contributions to Each Archetype")
 plt.xlabel("Archetypes")
 plt.ylabel("Variables")
+
+# Show all y-ticks
+plt.yticks(ticks=np.arange(len(archetype_df.index)), labels=archetype_df.index, rotation=0)
+
 plt.tight_layout()
 plt.show()
 
@@ -160,27 +171,28 @@ plt.ylabel("Archetype")
 plt.tight_layout()
 plt.show()
 
-"""
 from sklearn.metrics import silhouette_score, silhouette_samples
 import matplotlib.cm as cm
+range_n_clusters = range(5, 11)
+X_input = X_trans  # Can be ICA or AA projections
 
-range_n_clusters = range(2, 12)  # Try 2 to 10 clusters
+n_cols = 3
+n_rows = int(np.ceil(len(range_n_clusters) / n_cols))
+fig, axes = plt.subplots(n_rows, n_cols, figsize=(n_cols * 6, n_rows * 4))
+axes = axes.flatten()
 
-X_input = X_trans  # Use the ICA or AA projection
+silhouette_avg_list = []
 
-for n_clusters in range_n_clusters:
-    fig, ax = plt.subplots(figsize=(7, 5))
+for idx, n_clusters in enumerate(range_n_clusters):
+    ax = axes[idx]
 
-    # Run k-means
     kmeans = KMeans(n_clusters=n_clusters, random_state=0)
     cluster_labels = kmeans.fit_predict(X_input)
 
-    # Silhouette score
     silhouette_avg = silhouette_score(X_input, cluster_labels)
-    print(f"For n_clusters = {n_clusters}, average silhouette_score = {silhouette_avg:.3f}")
+    sample_silhouette_values = silhouette_samples(X_input, cluster_labels)  
 
-    # Compute silhouette scores for each sample
-    sample_silhouette_values = silhouette_samples(X_input, cluster_labels)
+    silhouette_avg_list.append(silhouette_avg)
 
     y_lower = 10
     for i in range(n_clusters):
@@ -198,20 +210,28 @@ for n_clusters in range_n_clusters:
         ax.text(-0.05, y_lower + 0.5 * size_cluster_i, str(i))
         y_lower = y_upper + 10
 
-    ax.set_title(f"Silhouette Plot for {n_clusters} Clusters")
-    ax.set_xlabel("Silhouette Coefficient")
-    ax.set_ylabel("Cluster Label")
     ax.axvline(x=silhouette_avg, color="red", linestyle="--")
-    ax.set_yticks([])
+    ax.set_title(f"{n_clusters} Clusters\nAvg Silhouette = {silhouette_avg:.2f}")
     ax.set_xlim([-0.1, 1])
-    plt.tight_layout()
-    plt.show()
-"""
+    ax.set_ylim([0, len(X_input) + (n_clusters + 1) * 10])
+    ax.set_yticks([])
+    ax.set_xlabel("Silhouette Coefficient")
+    ax.set_ylabel("")
+
+# Hide any unused subplots
+for j in range(idx + 1, len(axes)):
+    fig.delaxes(axes[j])
+
+fig.suptitle("Silhouette Plots for Varying KMeans Clusters", fontsize=16)
+plt.tight_layout(rect=[0, 0, 1, 0.96])
+plt.show()
 
 from sklearn.manifold import TSNE
 
+num_clusters = 8
+
 # === CLUSTERING ===
-kmeans = KMeans(n_clusters=9, random_state=0)  # choose your number of clusters
+kmeans = KMeans(n_clusters=num_clusters, random_state=0)  # choose your number of clusters
 cluster_labels = kmeans.fit_predict(X_trans)
 
 # === 2D PROJECTION ===
