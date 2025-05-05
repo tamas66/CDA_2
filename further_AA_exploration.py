@@ -93,7 +93,7 @@ def cv_grid_search_archetypes(df, categorical_cols, k_values=[6,7,8,9],delta_val
 
 def emotion_weight_clustering(df, weights,
                               emotion_cols=None,
-                              combined_k=3,
+                              combined_k=7,
                               random_state=42):
     """
     Clusters by [archetype weights + emotions], shows PCA map & emotion profiles
@@ -143,6 +143,54 @@ def emotion_weight_clustering(df, weights,
         }
     }
 
+
+def emotion_weight_clustering_pca(df, X_std, 
+                                  n_components=12,
+                                  emotion_cols=None,
+                                  combined_k=3,
+                                  random_state=42):
+    """
+    Clusters by [PCA components + emotions], shows PCA map & emotion profiles.
+    """
+    if emotion_cols is None:
+        emotion_cols = ['upset','hostile','alert','ashamed',
+                        'inspired','nervous','attentive','afraid','active','determined']
+
+    # PCA transform
+    X_pca = PCA(n_components=n_components).fit_transform(X_std)
+
+    # emotion features
+    E = df[emotion_cols].astype(float).values
+
+    # scale both
+    Ws = StandardScaler().fit_transform(X_pca)
+    Es = StandardScaler().fit_transform(E)
+
+    # concat & cluster
+    Xc = np.hstack([Ws, Es])
+    kmc = KMeans(n_clusters=combined_k, random_state=random_state).fit(Xc)
+    labels_c = kmc.labels_
+    df['combined_cluster_pca'] = labels_c
+
+    # emotion profile per cluster
+    cep = df.groupby('combined_cluster_pca')[emotion_cols].mean().reset_index().melt(
+        id_vars='combined_cluster_pca', var_name='emotion', value_name='mean_score'
+    )
+    plt.figure(figsize=(10,4))
+    sns.barplot(data=cep, x='emotion', y='mean_score', hue='combined_cluster_pca')
+    plt.xticks(rotation=45)
+    plt.title('Mean emotion ratings by combined PCA cluster')
+    plt.tight_layout()
+    plt.show()
+
+    return {
+        'combined_pca': {
+            'labels': labels_c,
+            'cluster_emotions_profile': cep
+        }
+    }
+
+
 def plot_archetype_weights_by_phase(weights, phases, component_prefix='A'):
     # overall distributions
     n_components = weights.shape[1]
@@ -181,6 +229,46 @@ def plot_archetype_weights_by_phase(weights, phases, component_prefix='A'):
     g.set_axis_labels("Phase", "Weight")
     plt.tight_layout()
     plt.show()
+
+def plot_component_scores_by_phase(pca_scores, phases, component_prefix='PC'):
+    n_components = pca_scores.shape[1]
+    comp_names = [f"{component_prefix} {i+1}" for i in range(n_components)]
+    df_all = pd.DataFrame(pca_scores, columns=comp_names)
+
+    # overall boxplot
+    plt.figure(figsize=(8,5))
+    sns.boxplot(data=df_all)
+    plt.title('Distribution of PCA Component Scores')
+    plt.xlabel('Principal Component')
+    plt.ylabel('Score')
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    plt.show()
+
+    # faceted by phase
+    df_phase = df_all.copy()
+    df_phase['Phase'] = pd.Series(phases).astype(str).values
+    melted = df_phase.melt(
+        id_vars='Phase',
+        var_name='Component',
+        value_name='Score'
+    )
+
+    g = sns.catplot(
+        data=melted,
+        x='Phase',
+        y='Score',
+        col='Component',
+        kind='box',
+        col_wrap=3,
+        sharey=False,
+        height=4
+    )
+    g.fig.suptitle('PCA Component scores by task phase', y=1.02)
+    g.set_axis_labels("Phase", "Score")
+    plt.tight_layout()
+    plt.show()
+
 
 # track archetype evolution through rounds
 # use S.T weights directly
@@ -289,6 +377,88 @@ def plot_archetype_dynamics(df, weights, participant=None,
     plt.grid(True)
     plt.show()
 
+def plot_component_dynamics(df, pca_scores, participant=None, 
+                            id_col='Individual', round_col='Round', phase_col='Phase',
+                            prefix='PC', n_clusters=3):
+    """
+    Visualize PCA component dynamics over time for a participant or average.
+    """
+    df[id_col] = df[id_col].astype(str)
+    n_comp = pca_scores.shape[1]
+
+    # individual
+    if participant is not None:
+        pid = str(participant)
+        mask = df[id_col] == pid
+        if mask.sum() == 0:
+            raise ValueError(f"No rows found for participant {pid}")
+
+        df_sub = df.loc[mask].copy().reset_index(drop=True)
+        w_sub = pca_scores[mask.values]
+
+        df_sub = df_sub.sort_values(by=[round_col, phase_col]).reset_index(drop=True)
+        w_sub = w_sub[df_sub.index.values]
+
+        labels = [f"R{r} {p}" for r, p in zip(df_sub[round_col], df_sub[phase_col])]
+
+        fig, ax = plt.subplots(figsize=(12, 6))
+        x = np.arange(len(labels))
+        for i in range(n_comp):
+            ax.plot(x, w_sub[:, i], marker='o', label=f'{prefix} {i+1}')
+        ax.set_xticks(x)
+        ax.set_xticklabels(labels, rotation=45, ha='right')
+        ax.set_xlabel('Task (Round + Phase)')
+        ax.set_ylabel('PCA Score')
+        ax.legend(bbox_to_anchor=(1.05,1), loc='upper left')
+        plt.title(f'{prefix} Dynamics for participant {pid}')
+        plt.tight_layout()
+        plt.show()
+
+    # mean dynamics
+    df_all = df.copy().reset_index(drop=True)
+    df_all = df_all.sort_values(by=[round_col, phase_col]).reset_index(drop=True)
+
+    grouped = df_all.groupby([round_col, phase_col])
+    mean_scores = []
+    labels = []
+    for (r, p), grp in grouped:
+        mean_scores.append(pca_scores[grp.index].mean(axis=0))
+        labels.append(f"R{r} {p}")
+    mean_scores = np.vstack(mean_scores)
+
+    fig, ax = plt.subplots(figsize=(12, 6))
+    x = np.arange(len(labels))
+    for i in range(n_comp):
+        ax.plot(x, mean_scores[:, i], marker='o', label=f'{prefix} {i+1}')
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels, rotation=45, ha='right')
+    ax.set_xlabel('Task (Round + Phase)')
+    ax.set_ylabel('Mean PCA Score')
+    ax.legend(bbox_to_anchor=(1.05,1), loc='upper left')
+    plt.title(f'Mean {prefix} dynamics across participants')
+    plt.tight_layout()
+    plt.show()
+
+    # cluster task phases
+    kmeans = KMeans(n_clusters=n_clusters, random_state=42)
+    clusters = kmeans.fit_predict(mean_scores)
+
+    cluster_df = pd.DataFrame({
+        'Task': labels,
+        'Cluster': clusters
+    })
+    cluster_df['Round'] = cluster_df['Task'].str.extract(r'round_(\d+)', expand=False).astype(float)
+    cluster_df['Phase'] = cluster_df['Task'].str.extract(r'phase(\d+)', expand=False).astype(float)
+
+    plt.figure(figsize=(10, 6))
+    sns.scatterplot(data=cluster_df, x='Phase', y='Round', hue='Cluster', palette='tab10', s=200)
+    plt.title('Clusters of task phases based on PCA score patterns')
+    plt.gca().invert_yaxis()
+    plt.grid(True)
+    plt.show()
+
+
+
 if __name__ == "__main__":
     from initial_data import load_data, inspect_data, preprocess_data
     # load the data
@@ -320,12 +490,11 @@ if __name__ == "__main__":
     # standardize
     scaler = StandardScaler()
     X_std = scaler.fit_transform(X)  # shape (312, 52)
-
     plot_pcha_sse(X_std, k_min=2, k_max=9, delta=0.1)
     #cv_results, best_params = cv_grid_search_archetypes(df=df,categorical_cols=categorical,k_values=[4,5,6,7,8,9,10,11],delta_values=[0.2,0.4,0.5,0.8],n_splits=5)
     # number of components from cross-validation
-    n_components = 11 # 8
-    delta = 0.8 # 0.9
+    n_components = 7 
+    delta = 0.8 
 
     XC, S, C, SSE, varexpl = PCHA(X_std.T, noc=n_components, delta=delta)
     archetypes = XC.T
@@ -363,105 +532,13 @@ if __name__ == "__main__":
     print(f"AA Reconstruction Error: {aa_reconstruction_error:.2f}")
     print(f"PCA Reconstruction Error: {np.mean(np.square(X_std - pca.inverse_transform(pca.transform(X_std)))):.2f}")
 
-    plot_archetype_dynamics(df, weights, participant='2', n_clusters = 2)
+    plot_archetype_dynamics(df, weights, participant='2', n_clusters = 3)
 
 
-'''
-###### some additional PCA stuff which does the same TS-plot as for the AA, maybe useful?
-from sklearn.decomposition import PCA
+    pca = PCA(n_components=12)
+    pca_scores = pca.fit_transform(X_std)
 
-n_components = 10  
-pca = PCA(n_components=n_components)
-pca_weights = pca.fit_transform(X_std)  
-
-participant = '2'
-df['Individual'] = df['Individual'].astype(str)
-mask = df['Individual'] == participant
-
-n_selected = mask.sum()
-print(f"Selected {n_selected} rows for participant {participant}")
-if n_selected == 0:
-    raise ValueError(f"No rows found for participant {participant}")
-
-df_sub = df.loc[mask].reset_index(drop=True)
-weights_sub = pca_weights[mask.values, :]
-
-# plot time series
-fig, ax = plt.subplots(figsize=(12, 6))
-for i in range(weights_sub.shape[1]):
-    ax.plot(np.arange(n_selected), weights_sub[:, i], marker='o', label=f'PC{i+1}')
-
-df_sub_sorted = df_sub.sort_values(by=['Round', 'Phase'])
-labels = [f"R{r} {p}" for r, p in zip(df_sub_sorted['Round'], df_sub_sorted['Phase'])]
-ax.set_xticks(np.arange(n_selected))
-ax.set_xticklabels(labels, rotation=45, ha='right')
-ax.set_ylabel('PCA Component Value')
-ax.set_xlabel('Task (round + phase)')
-ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-plt.title(f'PCA dynamics for participant {participant}')
-plt.tight_layout()
-plt.show()
-
-
-df_sorted = df.sort_values(by=['Round', 'Phase']).reset_index(drop=True)
-grouped = df_sorted.groupby(['Round', 'Phase'])
-
-mean_weights = []
-labels = []
-
-for (round_, phase), group in grouped:
-    group_weights = pca_weights[group.index, :]
-    mean = group_weights.mean(axis=0)
-    mean_weights.append(mean)
-    labels.append(f"R{round_} {phase}")
-
-mean_weights = np.array(mean_weights)
-
-
-fig, ax = plt.subplots(figsize=(12, 6))
-for i in range(mean_weights.shape[1]):
-    ax.plot(np.arange(len(labels)), mean_weights[:, i], marker='o', label=f'PC{i+1}')
-
-ax.set_xticks(np.arange(len(labels)))
-ax.set_xticklabels(labels, rotation=45, ha='right')
-ax.set_ylabel('Mean PCA Value')
-ax.set_xlabel('Task (round + phase)')
-ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-plt.title('Mean PCA Dynamics across Tasks')
-plt.tight_layout()
-plt.show()
-
-
-
-from sklearn.cluster import KMeans
-
-n_clusters = 2
-kmeans = KMeans(n_clusters=n_clusters, random_state=42)
-clusters = kmeans.fit_predict(mean_weights)
-
-cluster_df = pd.DataFrame({
-    'Task': labels,
-    'Cluster': clusters
-})
-
-# Extract Round and Phase
-cluster_df['Round'] = cluster_df['Task'].str.extract(r'round_(\d+)', expand=False).astype(int)
-cluster_df['Phase'] = cluster_df['Task'].str.extract(r'phase(\d+)', expand=False).astype(int)
-
-
-plt.figure(figsize=(10, 6))
-sns.scatterplot(
-    data=cluster_df,
-    x='Phase',
-    y='Round',
-    hue='Cluster',
-    palette='tab10',
-    s=200,
-    legend='full'
-)
-plt.title('Clusters of task phases based on PCA patterns')
-plt.gca().invert_yaxis()
-plt.grid(True)
-plt.show()
-
-'''
+    # replace AA-based functions:
+    emotion_weight_clustering_pca(df, X_std, n_components=7)
+    plot_component_scores_by_phase(pca_scores, df['Phase'])
+    plot_component_dynamics(df, pca_scores, participant='2', n_clusters=3)
